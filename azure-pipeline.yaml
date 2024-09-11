@@ -1,0 +1,78 @@
+trigger:
+- main
+
+jobs:
+- job: BuildAndPush
+  displayName: 'Build Docker Image and Push to ACR'
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: Checkout@2
+    inputs:
+      repository: 'self'
+      clean: true
+
+  - task: Docker@2
+    inputs:
+      command: 'build'
+      Dockerfile: '**/Dockerfile'
+      tags: '$(Build.BuildId)'
+      containerRegistry: '<ACR-Service-Connection>'
+      repository: '<your-acr-repository>'
+
+  - task: Docker@2
+    inputs:
+      command: 'push'
+      tags: '$(Build.BuildId)'
+      containerRegistry: '<ACR-Service-Connection>'
+      repository: '<your-acr-repository>'
+- job: TerraformProvision
+  displayName: 'Provision Infrastructure'
+  dependsOn: BuildAndPush
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: TerraformInstaller@0
+    inputs:
+      terraformVersion: '1.0.x'
+
+  - script: |
+      terraform init
+      terraform apply -auto-approve
+    workingDirectory: '<path-to-terraform-code>'
+    displayName: 'Terraform Apply'
+- job: DeployToAKS
+  displayName: 'Deploy Docker Image to AKS'
+  dependsOn: TerraformProvision
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: '<Azure-Service-Connection>'
+      scriptType: 'bash'
+      scriptPath: 'deploy-to-aks.sh'
+- job: Test
+  displayName: 'Run Tests'
+  dependsOn: DeployToAKS
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - script: |
+      # Your test script or commands here
+      curl http://<service-url>/health
+    displayName: 'Run Tests'
+- job: TerraformTeardown
+  displayName: 'Tear Down Infrastructure'
+  dependsOn: Test
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: TerraformInstaller@0
+    inputs:
+      terraformVersion: '1.0.x'
+
+  - script: |
+      terraform destroy -auto-approve
+    workingDirectory: '<path-to-terraform-code>'
+    displayName: 'Terraform Destroy'
