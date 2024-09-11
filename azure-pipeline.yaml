@@ -12,6 +12,34 @@ jobs:
       repository: 'self'
       clean: true
 
+  - task: Maven@3
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'clean verify'
+    options: '-Dsonar.projectKey=my_project_key -Dsonar.host.url=http://your-sonarqube-server -Dsonar.login=$(SONAR_TOKEN)'
+
+- task: SonarQubePrepare@5
+  inputs:
+    SonarQube: 'yourSonarQubeServiceConnection'
+    scannerMode: 'CLI'
+    configMode: 'file'
+    configFile: 'sonar-project.properties'
+
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'sonar:sonar'
+    options: '-Dsonar.login=$(SONAR_TOKEN)'
+
+- task: SonarQubeAnalyze@5
+  inputs:
+    SonarQube: 'yourSonarQubeServiceConnection'
+
+- task: SonarQubePublish@5
+  inputs:
+    SonarQube: 'yourSonarQubeServiceConnection'
+    pollingTimeoutSec: '300'
+  
   - task: Docker@2
     inputs:
       command: 'build'
